@@ -9,6 +9,8 @@ import {
   type MouseEvent,
   type ReactNode,
 } from "react";
+import { useRouter } from "next/navigation";
+import { Plus, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -39,16 +41,7 @@ function createId() {
   return Math.random().toString(36).slice(2);
 }
 
-const fallbackMessages: ChatMessage[] = [
-  {
-    id: "welcome",
-    role: "assistant",
-    content:
-      "I’m connected to your Gmail, Calendar, and HubSpot data. Ask me to draft a follow-up, prepare for a meeting, or automate a workflow.",
-    createdAt: new Date().toISOString(),
-    status: "complete",
-  },
-];
+const fallbackMessages: ChatMessage[] = [];
 
 const fallbackSuggestions: ChatSuggestion[] = [];
 
@@ -73,6 +66,7 @@ export function ChatShell({
   defaultSuggestions = fallbackSuggestions,
   threadId,
 }: ChatShellProps) {
+  const router = useRouter();
   const browserTimeZone = useMemo(() => {
     try {
       return Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -143,6 +137,7 @@ export function ChatShell({
   const [selectedSections, setSelectedSections] = useState<SectionId[]>([]);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
+  const [mobileTab, setMobileTab] = useState<"chat" | "history">("chat");
 
   const contextSections = useMemo(
     () => buildContextSections(contextSnapshot),
@@ -739,6 +734,156 @@ export function ChatShell({
 
   return (
     <div className="flex h-full w-full">
+      {/* Mobile View */}
+      <div className="flex h-full w-full flex-col lg:hidden">
+        {/* Top header */}
+        <div className="flex items-center justify-between border-b bg-background px-4 py-3">
+          <h1 className="text-lg font-semibold">Ask Anything</h1>
+          <button
+            onClick={() => router.push("/settings/integrations")}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        
+        {/* Tab bar */}
+        <div className="flex items-center border-b bg-background">
+          <button
+            onClick={() => setMobileTab("chat")}
+            className={cn(
+              "flex-1 py-3 text-sm font-medium border-b-2 transition-colors",
+              mobileTab === "chat"
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground"
+            )}
+          >
+            Chat
+          </button>
+          <button
+            onClick={() => setMobileTab("history")}
+            className={cn(
+              "flex-1 py-3 text-sm font-medium border-b-2 transition-colors",
+              mobileTab === "history"
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground"
+            )}
+          >
+            History
+          </button>
+          <button
+            onClick={() => {
+              handleStartNewChat();
+              setMobileTab("chat");
+            }}
+            className="px-3 py-3 text-sm font-medium text-primary flex items-center gap-1"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Next chat</span>
+          </button>
+        </div>
+
+        {mobileTab === "chat" ? (
+          <>
+            {/* Context indicator */}
+            {selectedSections.length > 0 && (
+              <div className="border-b bg-muted/50 px-4 py-2">
+                <div className="text-xs text-muted-foreground">
+                  Context set to {selectedSections.includes('calendar') ? 'all meetings' : 
+                                  selectedSections.includes('gmail') ? 'all emails' : 
+                                  selectedSections.includes('hubspot') ? 'all contacts' : 'selected items'}
+                </div>
+                <div className="text-xs text-muted-foreground opacity-60">
+                  {formatTimeSince(contextSnapshot.lastSynced || new Date().toISOString())} – {new Date(contextSnapshot.lastSynced || new Date()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </div>
+              </div>
+            )}
+
+            {/* Chat messages */}
+            <div className="flex-1 overflow-y-auto bg-background px-4 py-4">
+              {!sortedMessages.length && !isLoadingThread && (
+                <div className="flex h-full items-center justify-center">
+                  <div className="text-center">
+                    <p className="text-lg font-medium text-foreground">How can I help you today?</p>
+                    
+                    {/* Suggestion cards */}
+                    <div className="mt-6 space-y-3">
+                      <button className="w-full rounded-xl border bg-background p-3 text-left transition-colors hover:bg-muted/50">
+                        <p className="text-sm">What can you help me with?</p>
+                      </button>
+                      <button className="w-full rounded-xl border bg-background p-3 text-left transition-colors hover:bg-muted/50">
+                        <p className="text-sm">Tell me about my recent activities</p>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {sortedMessages.map((message) => (
+                <ChatMessageBubble key={message.id} message={message} />
+              ))}
+              {isLoadingThread && (
+                <div className="rounded-xl border border-dashed border-muted bg-muted/30 p-3 text-center text-xs text-muted-foreground">
+                  Loading chat…
+                </div>
+              )}
+              {threadLoadError && (
+                <div className="rounded-xl border text-center text-xs font-medium p-3 border-rose-200 bg-rose-50 text-rose-700">
+                  {threadLoadError}
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+            
+            {/* Composer */}
+            <div className="border-t bg-background p-4">
+              <ChatComposer
+                onSubmit={handleSubmit}
+                disabled={isSubmitting || isLoadingThread}
+                onAddContext={handleToggleSection}
+                selectedSections={selectedSections}
+                sectionOrder={SECTION_ORDER}
+                sectionConfigs={contextSections}
+                lastSynced={contextSnapshot.lastSynced}
+              />
+            </div>
+          </>
+        ) : (
+          /* History tab content */
+          <div className="flex-1 overflow-y-auto bg-background p-4">
+            <div className="space-y-2">
+              {threadList.map((thread) => (
+                <button
+                  key={thread.id}
+                  onClick={() => {
+                    handleSelectThread(thread.id);
+                    setMobileTab("chat");
+                  }}
+                  className={cn(
+                    "w-full rounded-lg p-3 text-left transition-colors",
+                    selectedThreadId === thread.id ? "bg-muted" : "hover:bg-muted/50"
+                  )}
+                >
+                  <div className="font-medium">{thread.title}</div>
+                  <div className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+                    {thread.summary || "No summary yet."}
+                  </div>
+                  <div className="mt-2 text-xs text-muted-foreground/60">
+                    {formatTimeSince(thread.updatedAt)} ago
+                  </div>
+                </button>
+              ))}
+              {threadList.length === 0 && (
+                <div className="text-center text-sm text-muted-foreground">
+                  No past chats yet.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Desktop Sidebar */}
       <aside className="hidden w-64 flex-shrink-0 border-r bg-background lg:block">
         <div className="flex h-full w-64 flex-col overflow-hidden p-2">
           <div className="flex items-center justify-between gap-2">
@@ -789,52 +934,8 @@ export function ChatShell({
           </div>
         </div>
       </aside>
-      <div
-        className="flex h-full flex-1 flex-col overflow-hidden"
-        style={{ width: "calc(100vw - 36rem)" }}
-      >
-        <div className="mb-3 flex flex-col gap-2 px-4 pt-4 lg:hidden">
-          <div className="flex items-center gap-2">
-            <select
-              className="flex-1 rounded-xl border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-              value={selectedThreadId ?? ""}
-              onChange={(event) => {
-                const value = event.target.value;
-                if (!value) {
-                  handleStartNewChat();
-                  return;
-                }
-                handleSelectThread(value);
-              }}
-              disabled={isSubmitting || isLoadingThread}
-            >
-              <option value="">Start new chat</option>
-              {threadList.map((thread) => (
-                <option key={thread.id} value={thread.id}>
-                  {thread.title}
-                </option>
-              ))}
-            </select>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleStartNewChat}
-              disabled={isSubmitting || isLoadingThread}
-            >
-              New chat
-            </Button>
-          </div>
-          {activeThread ? (
-            <p className="text-xs text-muted-foreground">
-              Updated {formatTimeSince(activeThread.updatedAt)} ago
-            </p>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Draft a prompt to begin a new chat.
-            </p>
-          )}
-        </div>
-        <div className="custom-scrollbar flex-1 space-y-3 overflow-y-auto bg-muted/5 px-6 py-4 sm:space-y-4">
+      <div className="hidden h-full flex-1 flex-col overflow-hidden lg:flex lg:w-[calc(100%-16rem)] xl:w-[calc(100%-36rem)]">
+        <div className="custom-scrollbar flex-1 space-y-3 overflow-y-auto bg-muted/5 px-4 py-4 sm:space-y-4 lg:px-6">
           {sortedMessages.map((message) => (
             <ChatMessageBubble key={message.id} message={message} />
           ))}
@@ -862,7 +963,7 @@ export function ChatShell({
           />
         </div>
       </div>
-      <aside className="hidden w-80 flex-shrink-0 border-l bg-background lg:block">
+      <aside className="hidden w-80 flex-shrink-0 border-l bg-background xl:block">
         <div className="flex h-full flex-col gap-4 overflow-y-auto p-4">
           <div className="rounded-3xl border bg-card p-6 shadow-sm">
             <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">

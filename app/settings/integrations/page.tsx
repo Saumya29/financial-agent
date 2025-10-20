@@ -99,9 +99,13 @@ export default async function IntegrationsPage({ searchParams }: PageProps) {
             >
               <path d="m15 18-6-6 6-6" />
             </svg>
-            Back to home
           </Link>
-          <LogoutButton />
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted-foreground">
+              {session.user.email}
+            </span>
+            <LogoutButton />
+          </div>
         </div>
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
           Integrations

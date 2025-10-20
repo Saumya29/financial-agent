@@ -51,6 +51,12 @@ export function ChatComposer({
     hubspot: "All contacts",
   };
 
+  const tabLabelsMobile: Record<SectionId, string> = {
+    gmail: "Emails",
+    calendar: "Meetings",
+    hubspot: "Contacts",
+  };
+
   const formatRelative = (input: string) => {
     const date = new Date(input);
     if (Number.isNaN(date.getTime())) {
@@ -101,7 +107,8 @@ export function ChatComposer({
                         : "border-muted bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground"
                     }`}
                   >
-                    <span>{tabLabels[sectionId]}</span>
+                    <span className="hidden sm:inline">{tabLabels[sectionId]}</span>
+                    <span className="sm:hidden">{tabLabelsMobile[sectionId]}</span>
                     {config.count > 0 && (
                       <span className={`ml-1.5 text-[11px] ${isSelected ? "opacity-80" : "opacity-60"}`}>
                         {countDisplay}
@@ -125,52 +132,36 @@ export function ChatComposer({
       {/* Input form */}
       <form
         onSubmit={handleSubmit}
-        className="relative flex items-center gap-1 rounded-2xl border bg-card p-2 shadow-sm sm:gap-2 sm:rounded-3xl sm:p-3"
+        className="relative flex items-center gap-1 rounded-full border bg-background p-1.5 shadow-sm sm:gap-2 sm:rounded-3xl sm:p-2"
       >
         <div className="flex items-center gap-0.5 sm:gap-1">
           <button
             type="button"
             onClick={() => setShowContextTabs((prev) => !prev)}
-            className="relative flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50 sm:h-9 sm:w-9"
+            className="relative flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50 sm:h-8 sm:w-8"
             disabled={disabled || isSubmitting}
           >
-            <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
+            <Plus className="h-4 w-4" />
             <span className="sr-only">Add context</span>
           </button>
         </div>
         <input
           value={value}
           onChange={(event) => setValue(event.target.value)}
-          placeholder="Ask about emails, meetings, or contacts..."
+          placeholder="Ask anything about your meetings..."
           className={cn(
-            "flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground",
+            "flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground px-1",
             "disabled:opacity-50"
           )}
           disabled={disabled || isSubmitting}
         />
-        <div className="flex items-center gap-0.5 sm:gap-1">
+        <div className="flex items-center gap-0.5">
           <button
             type="button"
-            className="hidden h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50 sm:flex"
+            className="flex h-7 w-7 items-center justify-center rounded-full bg-black text-white hover:bg-black/80 transition-colors disabled:opacity-50 sm:h-8 sm:w-8"
             disabled={disabled || isSubmitting}
           >
-            <Paperclip className="h-5 w-5" />
-            <span className="sr-only">Attach file</span>
-          </button>
-          <button
-            type="button"
-            className="hidden h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50 sm:flex"
-            disabled={disabled || isSubmitting}
-          >
-            <User className="h-5 w-5" />
-            <span className="sr-only">User profile</span>
-          </button>
-          <button
-            type="button"
-            className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50 sm:h-9 sm:w-9"
-            disabled={disabled || isSubmitting}
-          >
-            <Mic className="h-4 w-4 sm:h-5 sm:w-5" />
+            <Mic className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             <span className="sr-only">Voice input</span>
           </button>
         </div>

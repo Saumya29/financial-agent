@@ -225,23 +225,8 @@ export default async function HomePage() {
   }));
 
   return (
-    <main className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-background via-background to-muted/40">
-      <header className="flex-shrink-0 border-b bg-background">
-        <div className="flex w-full items-center justify-between px-4 py-3 sm:px-6 sm:py-4">
-          <div>
-            <h1 className="text-lg font-semibold tracking-tight sm:text-xl">
-              Financial Advisor Agent
-            </h1>
-          </div>
-          <div className="flex items-center gap-4">
-            <p className="text-sm text-muted-foreground">
-              {session.user.email}
-            </p>
-            <LogoutButton />
-          </div>
-        </div>
-      </header>
-      <div className="flex h-full flex-1 overflow-hidden">
+    <main className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-background via-background to-muted/40 relative">
+      <div className="flex h-full overflow-hidden">
         <ChatShell
           connectionStatus={connectionStatus}
           tasks={taskPreviews}
@@ -252,6 +237,13 @@ export default async function HomePage() {
           threadId={recentThread?.id}
           threads={threadPreviews}
         />
+      </div>
+      {/* Email and Logout for larger screens only */}
+      <div className="hidden lg:flex absolute bottom-4 right-4 items-center gap-3">
+        <span className="text-sm text-muted-foreground">
+          {session.user.email}
+        </span>
+        <LogoutButton />
       </div>
     </main>
   );
