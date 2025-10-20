@@ -1,0 +1,39 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# typescript
+*.tsbuildinfo
+
+# misc
+.DS_Store
+*.pem
+
+# env
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+
+# prisma
+/prisma/migrations
+
+# vercel
+.vercel
+
+#editor
+.history

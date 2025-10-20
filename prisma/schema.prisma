@@ -1,0 +1,470 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+
+  accounts Account[]
+  sessions Session[]
+  credentials OAuthCredential[]
+  hubspotPortals HubspotPortal[]
+  chatThreads   ChatThread[]
+  syncStates    SyncState[]
+  emailThreads  EmailThread[]
+  emailMessages EmailMessage[]
+  calendarEvents CalendarEvent[]
+  hubspotContacts HubspotContact[]
+  hubspotNotes HubspotNote[]
+  documents     Document[]
+  documentChunks DocumentChunk[]
+  vectorEmbeddings VectorEmbedding[]
+  instructions Instruction[]
+  instructionEvaluations InstructionEvaluation[]
+  agentTasks AgentTask[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+enum ChatMessageRole {
+  system
+  user
+  assistant
+  tool
+}
+
+enum ChatMessageStatus {
+  pending
+  complete
+  error
+}
+
+enum SyncProvider {
+  gmail
+  calendar
+  hubspot
+}
+
+enum DocumentSourceType {
+  emailMessage
+  calendarEvent
+  hubspotNote
+  hubspotContact
+  manual
+}
+
+enum AgentTaskStatus {
+  pending
+  running
+  waiting
+  completed
+  failed
+  cancelled
+}
+
+enum AgentTaskType {
+  followUp
+  workflow
+  instruction
+}
+
+enum TaskStepStatus {
+  pending
+  running
+  completed
+  failed
+}
+
+enum InstructionStatus {
+  active
+  paused
+  archived
+}
+
+model ChatThread {
+  id        String        @id @default(cuid())
+  userId    String
+  title     String?
+  summary   String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages ChatMessage[]
+
+  @@index([userId, updatedAt])
+}
+
+model ChatMessage {
+  id        String             @id @default(cuid())
+  threadId  String
+  role      ChatMessageRole
+  status    ChatMessageStatus  @default(complete)
+  content   String             @db.Text
+  metadata  Json?
+  createdAt DateTime           @default(now())
+
+  thread ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  oauth_token_secret String? @db.Text
+  oauth_token        String? @db.Text
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model OAuthCredential {
+  id               String   @id @default(cuid())
+  userId           String
+  provider         String
+  providerAccountId String?
+  accessToken      String?  @db.Text
+  refreshToken     String?  @db.Text
+  expiresAt        DateTime?
+  scope            String?
+  tokenType        String?
+  rawResponse      Json?
+  metadata         Json?
+  encryptionKey    String
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+}
+
+model HubspotPortal {
+  id            String   @id @default(cuid())
+  userId        String
+  portalId      String
+  portalName    String?
+  portalDomain  String?
+  ownerEmail    String?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, portalId])
+  @@index([portalId])
+}
+
+model SyncState {
+  id         String        @id @default(cuid())
+  userId     String
+  provider   SyncProvider
+  resourceId String?
+  cursor     String?
+  lastSyncAt DateTime?
+  metadata   Json?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider, resourceId])
+}
+
+model EmailThread {
+  id            String         @id @default(cuid())
+  userId        String
+  gmailThreadId String
+  subject       String?
+  snippet       String?
+  historyId     String?
+  lastMessageAt DateTime?
+  metadata      Json?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages EmailMessage[]
+
+  @@unique([userId, gmailThreadId])
+  @@index([userId, lastMessageAt])
+}
+
+model EmailMessage {
+  id             String      @id @default(cuid())
+  userId         String
+  threadId       String
+  gmailMessageId String
+  internalDate   DateTime?
+  fromAddress    String?
+  toAddresses    String?     @db.Text
+  ccAddresses    String?     @db.Text
+  bccAddresses   String?     @db.Text
+  subject        String?
+  snippet        String?
+  bodyText       String?     @db.Text
+  bodyHtml       String?     @db.Text
+  metadata       Json?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  thread EmailThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, gmailMessageId])
+  @@index([threadId, internalDate])
+}
+
+model CalendarEvent {
+  id               String   @id @default(cuid())
+  userId           String
+  calendarId       String
+  eventId          String
+  status           String?
+  summary          String?
+  description      String?  @db.Text
+  location         String?
+  startTime        DateTime?
+  endTime          DateTime?
+  startTimeZone    String?
+  endTimeZone      String?
+  hangoutLink      String?
+  attendees        Json?
+  recurringEventId String?
+  rawPayload       Json?
+  remoteUpdatedAt  DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, calendarId, eventId])
+  @@index([userId, startTime])
+}
+
+model HubspotContact {
+  id              String   @id @default(cuid())
+  userId          String
+  portalId        String
+  contactId       String
+  email           String?
+  firstName       String?
+  lastName        String?
+  phone           String?
+  company         String?
+  lifecycleStage  String?
+  ownerEmail      String?
+  lastModifiedAt  DateTime?
+  properties      Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, portalId, contactId])
+  @@index([userId, email])
+}
+
+model HubspotNote {
+  id               String   @id @default(cuid())
+  userId           String
+  portalId         String
+  noteId           String
+  contactId        String?
+  title            String?
+  content          String?  @db.Text
+  createdAtRemote  DateTime?
+  updatedAtRemote  DateTime?
+  properties       Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, portalId, noteId])
+  @@index([userId, updatedAtRemote])
+}
+
+model Document {
+  id          String              @id @default(cuid())
+  userId      String
+  sourceType  DocumentSourceType
+  sourceId    String?
+  title       String?
+  description String?            @db.Text
+  metadata    Json?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  user   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chunks DocumentChunk[]
+
+  @@unique([userId, sourceType, sourceId])
+  @@index([userId, sourceType])
+}
+
+model DocumentChunk {
+  id        String   @id @default(cuid())
+  documentId String
+  userId    String
+  position  Int
+  content   String   @db.Text
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  document Document        @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vectors  VectorEmbedding[]
+
+  @@index([userId, documentId])
+  @@unique([documentId, position])
+}
+
+model VectorEmbedding {
+  id        String   @id @default(cuid())
+  chunkId   String
+  userId    String
+  strategy  String   @default("openai-text-embedding-3-large")
+  embedding Float[]
+  createdAt DateTime @default(now())
+
+  chunk DocumentChunk @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+  user  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([chunkId, strategy])
+  @@index([userId])
+}
+
+model Instruction {
+  id              String            @id @default(cuid())
+  userId          String
+  title           String
+  content         String            @db.Text
+  status          InstructionStatus @default(active)
+  triggers        Json?
+  metadata        Json?
+  lastEvaluatedAt DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agentTasks AgentTask[]
+  evaluations InstructionEvaluation[]
+
+  @@index([userId, status])
+}
+
+model InstructionEvaluation {
+  id            String   @id @default(cuid())
+  userId        String
+  instructionId String
+  eventType     String
+  eventPayload  Json?
+  outcome       String?
+  createdAt     DateTime @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instruction Instruction @relation(fields: [instructionId], references: [id], onDelete: Cascade)
+
+  @@index([instructionId, createdAt])
+}
+
+model AgentTask {
+  id             String         @id @default(cuid())
+  userId         String
+  instructionId  String?
+  type           AgentTaskType
+  status         AgentTaskStatus @default(pending)
+  summary        String?
+  metadata       Json?
+  scheduledFor   DateTime?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  cancelledAt    DateTime?
+  errorMessage   String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instruction Instruction? @relation(fields: [instructionId], references: [id], onDelete: SetNull)
+  steps       TaskStep[]
+  contexts    TaskContext[]
+
+  @@index([userId, status])
+  @@index([instructionId])
+}
+
+model TaskStep {
+  id          String        @id @default(cuid())
+  taskId      String
+  index       Int
+  title       String
+  status      TaskStepStatus @default(pending)
+  input       Json?
+  output      Json?
+  error       Json?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  task AgentTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, index])
+  @@index([taskId, status])
+}
+
+model TaskContext {
+  id        String   @id @default(cuid())
+  taskId    String
+  key       String
+  value     Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  task AgentTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, key])
+}
