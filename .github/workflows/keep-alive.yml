@@ -6,10 +6,26 @@ on:
   workflow_dispatch:
 
 jobs:
-  ping:
+  keep-alive:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Render App
+      - name: Ping Main Application
         run: |
-          echo "Pinging app health endpoint..."
-          curl -f https://financial-agent-42bh.onrender.com/api/health || exit 1
+          echo "Pinging main application..."
+          curl -f -m 30 https://financial-agent-42bh.onrender.com || echo "Main page ping failed"
+
+      - name: Ping Health Endpoint
+        run: |
+          echo "Pinging health endpoint..."
+          curl -f -m 30 https://financial-agent-42bh.onrender.com/api/health || echo "Health endpoint ping failed"
+
+      - name: Verify App Response
+        run: |
+          echo "Verifying app is responding..."
+          response=$(curl -s -o /dev/null -w "%{http_code}" https://financial-agent-42bh.onrender.com)
+          echo "Response code: $response"
+          if [ $response -eq 200 ] || [ $response -eq 304 ]; then
+            echo "✅ App is alive and responding"
+          else
+            echo "⚠️ App returned unexpected status code: $response"
+          fi
