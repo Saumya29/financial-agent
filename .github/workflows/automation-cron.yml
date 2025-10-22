@@ -1,0 +1,15 @@
+name: Run Automation
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Automation API
+        run: |
+          curl -X POST "https://financial-agent-42bh.onrender.com/api/automation/run" \
+            -H "Authorization: Bearer ${{ secrets.AUTOMATION_TOKEN }}"
