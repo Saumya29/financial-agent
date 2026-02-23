@@ -184,7 +184,7 @@ const agentTools: AgentTool<z.ZodTypeAny>[] = [
 
       if (calendarDateMatch || query.toLowerCase().includes("calendar") || query.toLowerCase().includes("meetings") || query.toLowerCase().includes("events")) {
         // Extract date from query or use a broad date range
-        let startDate = new Date();
+        const startDate = new Date();
         startDate.setHours(0, 0, 0, 0);
         let endDate = new Date(startDate);
         endDate.setDate(endDate.getDate() + 7); // Default to next 7 days
