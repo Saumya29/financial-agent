@@ -259,13 +259,23 @@ export function ChatShell({
     };
   }, [isTaskModalOpen, isActivityModalOpen]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  const scrollToBottom = (instant = false) => {
+    messagesEndRef.current?.scrollIntoView({ behavior: instant ? "instant" : "smooth" });
   };
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Scroll to bottom on initial mount when messages are loaded
+  useEffect(() => {
+    if (defaultMessages.length > 0) {
+      // Use setTimeout to ensure DOM is fully rendered
+      setTimeout(() => {
+        scrollToBottom(true);
+      }, 100);
+    }
+  }, []);
 
   async function handleSubmit(content: string) {
     const userMessage: ChatMessage = {

@@ -127,16 +127,12 @@ const listInstructionsSchema = z.object({
   status: z.enum(["active", "paused", "archived"]).optional(),
 });
 
-const lookupContactSchema = z
-  .object({
-    email: z.string().email().optional(),
-    name: z.string().optional(),
-    hubspotId: z.string().optional(),
-    limit: z.number().int().min(1).max(10).optional(),
-  })
-  .refine((value) => Boolean(value.email || value.name || value.hubspotId), {
-    message: "Provide at least one of email, name, or hubspotId",
-  });
+const lookupContactSchema = z.object({
+  email: z.string().email().optional(),
+  name: z.string().optional(),
+  hubspotId: z.string().optional(),
+  limit: z.number().int().min(1).max(20).optional(),
+});
 
 const agentTools: AgentTool<z.ZodTypeAny>[] = [
   {
@@ -178,14 +174,112 @@ const agentTools: AgentTool<z.ZodTypeAny>[] = [
     schema: searchKnowledgeSchema,
     handler: async (input, context) => {
       const { query, emailLimit, calendarLimit, contactLimit, exactSubjectMatch } = input;
-      
+
+      // Special handling for calendar date queries
+      const calendarDateMatch = query.match(/(?:on|for)\s+(?:(?:feb(?:ruary)?|march|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+)?(\d{1,2})(?:st|nd|rd|th)?(?:\s+(?:feb(?:ruary)?|march|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?))?(?:\s+\d{4})?|(?:this|next)\s+(?:week|month)|(?:tomorrow|tmrw)/i);
+
+      if (calendarDateMatch || query.toLowerCase().includes("calendar") || query.toLowerCase().includes("meetings") || query.toLowerCase().includes("events")) {
+        // Extract date from query or use a broad date range
+        let startDate = new Date();
+        startDate.setHours(0, 0, 0, 0);
+        let endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + 7); // Default to next 7 days
+
+        // Try to parse specific date from query
+        const dayMatch = query.match(/\b(\d{1,2})(?:st|nd|rd|th)?\b/);
+        if (dayMatch) {
+          const day = parseInt(dayMatch[1], 10);
+          startDate.setDate(day);
+          endDate = new Date(startDate);
+          endDate.setDate(endDate.getDate() + 1);
+        }
+
+        const calendarEvents = await prisma.calendarEvent.findMany({
+          where: {
+            userId: context.userId,
+            startTime: {
+              gte: startDate,
+              lt: endDate,
+            },
+          },
+          orderBy: { startTime: "asc" },
+          take: calendarLimit ?? 10,
+        });
+
+        const calendarSnippets = calendarEvents.map(event => ({
+          eventId: event.eventId,
+          summary: event.summary,
+          start: event.startTime?.toISOString() ?? null,
+          end: event.endTime?.toISOString() ?? null,
+          location: event.location,
+          description: event.description?.substring(0, 200) ?? null,
+        }));
+
+        return {
+          query,
+          emails: [],
+          calendar: calendarSnippets,
+          contacts: [],
+          metadata: {
+            dateRange: {
+              start: startDate.toISOString(),
+              end: endDate.toISOString(),
+            },
+            count: calendarSnippets.length,
+          },
+        };
+      }
+
+      // Special handling for searching emails by person name
+      const searchPersonMatch = query.match(/(?:search|find)\s+(?:for\s+)?(.+?)\s+in\s+(?:my\s+)?(?:email|mail|inbox)/i);
+      const simpleNameMatch = query.match(/^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)$/);
+
+      if (searchPersonMatch || simpleNameMatch) {
+        const personName = searchPersonMatch
+          ? searchPersonMatch[1].trim()
+          : simpleNameMatch![1].trim();
+
+        const emailsByPerson = await prisma.emailMessage.findMany({
+          where: {
+            userId: context.userId,
+            OR: [
+              { fromAddress: { contains: personName, mode: "insensitive" } },
+              { toAddresses: { contains: personName, mode: "insensitive" } },
+              { subject: { contains: personName, mode: "insensitive" } },
+            ],
+          },
+          orderBy: { internalDate: "desc" },
+          take: emailLimit ?? 10,
+        });
+
+        const emailSnippets = emailsByPerson.map(message => ({
+          messageId: message.gmailMessageId,
+          subject: message.subject,
+          snippet: message.bodyText?.substring(0, 200) ?? message.snippet ?? "",
+          from: message.fromAddress,
+          sentAt: message.internalDate?.toISOString() ?? null,
+        }));
+
+        return {
+          query,
+          emails: emailSnippets,
+          calendar: [],
+          contacts: [],
+          metadata: {
+            personSearch: true,
+            searchTerm: personName,
+            count: emailSnippets.length,
+          },
+        };
+      }
+
       // Special handling for "today" queries
       if (query.toLowerCase().includes("today") || query.toLowerCase().includes("emails from today")) {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
-        
+
         const todaysEmails = await prisma.emailMessage.findMany({
           where: {
             userId: context.userId,
@@ -492,14 +586,14 @@ const agentTools: AgentTool<z.ZodTypeAny>[] = [
   },
   {
     name: "createOrUpdateHubspotContact",
-    description: "Create or update a HubSpot contact record.",
+    description: "Create or update a HubSpot contact record. ALWAYS proceed immediately with available information - NEVER ask the user for more details. REQUIRED: email property. OPTIONAL: firstname, lastname, phone, jobtitle, company. If you have a full name like 'John Doe', split it into firstname: 'John', lastname: 'Doe'. Example: {properties: {email: 'john@example.com', firstname: 'John', lastname: 'Doe'}}. Omit unknown fields entirely.",
     parameters: {
       type: "object",
       properties: {
         contactId: { type: "string" },
         properties: {
           type: "object",
-          description: "HubSpot contact property key/value pairs.",
+          description: "HubSpot contact properties. MUST include email. Can include firstname, lastname, phone, jobtitle, company. Example: {email: 'test@example.com', firstname: 'John', lastname: 'Doe'}",
         },
       },
       required: ["properties"],
@@ -515,21 +609,21 @@ const agentTools: AgentTool<z.ZodTypeAny>[] = [
   },
   {
     name: "lookupHubspotContact",
-    description: "Look up HubSpot contacts stored locally by email, name, or HubSpot ID.",
+    description: "Look up or list HubSpot contacts. Provide email, name, or HubSpot ID to search for specific contacts, or call without parameters to list recent contacts.",
     parameters: {
       type: "object",
       properties: {
         email: { type: "string" },
         name: { type: "string" },
         hubspotId: { type: "string" },
-        limit: { type: "integer", minimum: 1, maximum: 10 },
+        limit: { type: "integer", minimum: 1, maximum: 20 },
       },
       required: [],
       additionalProperties: false,
     },
     schema: lookupContactSchema,
     handler: async (input, context) => {
-      const { email, name, hubspotId, limit = 5 } = input;
+      const { email, name, hubspotId, limit = 10 } = input;
       const contacts = await prisma.hubspotContact.findMany({
         where: {
           userId: context.userId,

@@ -23,13 +23,13 @@ export async function runProviderSync(provider: Provider) {
   try {
     switch (provider) {
       case "gmail":
-        await syncGmailMailbox(userId, { maxPages: 5, pageSize: 75 });
+        await syncGmailMailbox(userId, { maxPages: 2, pageSize: 25 });
         break;
       case "calendar":
-        await syncCalendarEvents(userId, { maxResults: 120 });
+        await syncCalendarEvents(userId, { maxResults: 250 });
         break;
       case "hubspot":
-        await syncHubspotContacts(userId, { maxPages: 5, limit: 100 });
+        await syncHubspotContacts(userId, { maxPages: 2, limit: 50 });
         break;
       default:
         throw new Error("Unsupported provider");
