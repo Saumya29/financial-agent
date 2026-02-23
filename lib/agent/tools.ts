@@ -134,6 +134,10 @@ const lookupContactSchema = z.object({
   limit: z.number().int().min(1).max(20).optional(),
 });
 
+const readEmailSchema = z.object({
+  messageId: z.string().min(1, "messageId is required"),
+});
+
 const agentTools: AgentTool<z.ZodTypeAny>[] = [
   {
     name: "searchKnowledge",
@@ -312,7 +316,51 @@ const agentTools: AgentTool<z.ZodTypeAny>[] = [
           }
         };
       }
-      
+
+      // Special handling for company/keyword searches (e.g., "mail from braintrust", "check company emails")
+      const companyMailMatch = query.match(/(?:mail|email|message)s?\s+(?:from|about|regarding|by)\s+(.+?)(?:\s|$)/i);
+      const checkCompanyMatch = query.match(/(?:check|find|search|show|any)\s+(?:mail|email)s?\s+(?:from|about)?\s*(.+?)(?:\s|$)/i);
+      const doIHaveMatch = query.match(/do\s+i\s+have\s+(?:any\s+)?(?:mail|email)s?\s+(?:from|about)?\s+(.+?)(?:\s|$)/i);
+
+      if (companyMailMatch || checkCompanyMatch || doIHaveMatch) {
+        const keyword = (companyMailMatch?.[1] || checkCompanyMatch?.[1] || doIHaveMatch?.[1])?.trim();
+
+        if (keyword) {
+          const emailsByKeyword = await prisma.emailMessage.findMany({
+            where: {
+              userId: context.userId,
+              OR: [
+                { fromAddress: { contains: keyword, mode: "insensitive" } },
+                { subject: { contains: keyword, mode: "insensitive" } },
+                { bodyText: { contains: keyword, mode: "insensitive" } },
+              ],
+            },
+            orderBy: { internalDate: "desc" },
+            take: emailLimit ?? 10,
+          });
+
+          const emailSnippets = emailsByKeyword.map(message => ({
+            messageId: message.gmailMessageId,
+            subject: message.subject,
+            snippet: message.bodyText?.substring(0, 200) ?? message.snippet ?? "",
+            from: message.fromAddress,
+            sentAt: message.internalDate?.toISOString() ?? null,
+          }));
+
+          return {
+            query,
+            emails: emailSnippets,
+            calendar: [],
+            contacts: [],
+            metadata: {
+              keywordSearch: true,
+              keyword,
+              count: emailSnippets.length,
+            },
+          };
+        }
+      }
+
       // If exact subject match is requested, search directly in database
       if (exactSubjectMatch) {
         const emails = await prisma.emailMessage.findMany({
@@ -354,6 +402,58 @@ const agentTools: AgentTool<z.ZodTypeAny>[] = [
         emails: retrieval.emailSnippets,
         calendar: retrieval.calendarSnippets,
         contacts: retrieval.hubspotContacts,
+      };
+    },
+  },
+  {
+    name: "readEmail",
+    description: "Read the full content of a specific email by its messageId. Use this when the user wants to see the complete email content, not just a snippet.",
+    parameters: {
+      type: "object",
+      properties: {
+        messageId: {
+          type: "string",
+          description: "The Gmail message ID of the email to read",
+        },
+      },
+      required: ["messageId"],
+      additionalProperties: false,
+    },
+    schema: readEmailSchema,
+    handler: async (input, context) => {
+      const { messageId } = input;
+
+      const email = await prisma.emailMessage.findFirst({
+        where: {
+          userId: context.userId,
+          gmailMessageId: messageId,
+        },
+        select: {
+          gmailMessageId: true,
+          subject: true,
+          fromAddress: true,
+          toAddresses: true,
+          ccAddresses: true,
+          internalDate: true,
+          bodyText: true,
+          bodyHtml: true,
+          snippet: true,
+        },
+      });
+
+      if (!email) {
+        throw new Error(`Email with messageId ${messageId} not found`);
+      }
+
+      return {
+        messageId: email.gmailMessageId,
+        from: email.fromAddress,
+        to: email.toAddresses?.split(", ") || [],
+        cc: email.ccAddresses?.split(", ").filter(Boolean) || [],
+        subject: email.subject,
+        date: email.internalDate?.toISOString() || null,
+        bodyText: email.bodyText || email.snippet || "",
+        bodyHtml: email.bodyHtml || null,
       };
     },
   },

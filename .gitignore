@@ -37,3 +37,6 @@
 
 #editor
 .history
+
+# logs
+/logs
