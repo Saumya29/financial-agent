@@ -29,9 +29,6 @@
 .env.production
 .env.test
 
-# prisma
-/prisma/migrations
-
 # vercel
 .vercel
 
